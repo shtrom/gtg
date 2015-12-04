@@ -11,3 +11,8 @@ tmp
 MANIFEST
 **.patch
 gtg.prof
+__pycache__
+.*.sw*
+
+# src/ usually has development version of liblarch
+src/
