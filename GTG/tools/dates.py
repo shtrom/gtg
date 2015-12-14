@@ -101,6 +101,8 @@ class Date(object):
             self._parse_init_value(NODATE)
         elif isinstance(value, datetime.date):
             self._real_date = value
+        elif isinstance(value, datetime.datetime):
+            self._real_date = value.date()
         elif isinstance(value, Date):
             # Copy internal values from other Date object
             self._real_date = value._real_date
@@ -243,7 +245,7 @@ class Date(object):
         if self._fuzzy is not None:
             return STRINGS[self._fuzzy]
         else:
-            return self._real_date.isoformat()
+            return self._real_date.strftime(ISODATE)
 
     def __repr__(self):
         return "GTG_Date(%s)" % str(self)
@@ -253,7 +255,7 @@ class Date(object):
         if self._fuzzy is not None:
             return ENGLISH_STRINGS[self._fuzzy]
         else:
-            return self._real_date.isoformat()
+            return self._real_date.strftime(ISODATE)
 
     def __bool__(self):
         return self._fuzzy != NODATE
@@ -277,7 +279,11 @@ class Date(object):
         if self._fuzzy == NODATE:
             return None
         else:
-            return (self.date() - datetime.date.today()).days
+            target_date = self.date()
+            if type(target_date) is datetime.datetime:
+                target_date = target_date.date()
+
+            return (target_date - datetime.date.today()).days
 
     @classmethod
     def today(cls):
