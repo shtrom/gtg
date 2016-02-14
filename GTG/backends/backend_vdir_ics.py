@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Getting Things GNOME! - a personal organizer for the GNOME desktop
 # Copyright (c) 2008-2013 - Lionel Dricot & Bertrand Rousseau
-# Copyright (c) 2015 - Olivier Mehani (this file)
+# Copyright (c) 2015-2016 - Olivier Mehani (this file)
 #
 # This program is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -19,7 +19,7 @@
 # -----------------------------------------------------------------------------
 
 '''
-Localfile is a read/write backend that will store your tasks as VTODO ICS files
+This is a read/write backend that will store your tasks as VTODO ICS files
 in a vdir [0]. The idea is to use this backend with a remote CalDAV server
 synced locally with vdirsyncer [1]. This allows to use GTG alongside CLI
 clients such at todoman [2].
@@ -37,6 +37,7 @@ from icalendar import Calendar, Todo, vDate, vDatetime, vText
 
 from GTG.backends.backendsignals import BackendSignals
 from GTG.backends.genericbackend import GenericBackend
+from GTG.backends.syncengine import SyncEngine, SyncMeme
 from GTG.core.dirs import DATA_DIR
 from GTG.core.translations import _
 from GTG.core.task import Task
@@ -57,12 +58,8 @@ def vDateMaybeTime(date):
 
 class Backend(GenericBackend):
     """
-    Localfile backend, which stores your tasks in a XML file in the standard
-    XDG_DATA_DIR/gtg folder (the path is configurable).
-    An instance of this class is used as the default backend for GTG.
-    This backend loads all the tasks stored in the localfile after it's enabled
-    and from that point on just writes the changes to the file: it does not
-    listen for eventual file changes
+    This is a read/write backend that will store your tasks as VTODO ICS files
+    in a vdir.
     """
 
     _general_description = {
@@ -79,7 +76,7 @@ class Backend(GenericBackend):
     }
 
     # Here, we define a parameter "vdir", which is a string, and has a default
-    # value as a random file in the default path
+    # value as "~/.calendars"
     _static_parameters = {
         "path": {
             GenericBackend.PARAM_TYPE: GenericBackend.TYPE_STRING,
@@ -97,6 +94,8 @@ class Backend(GenericBackend):
             "NEEDS-ACTION": Task.STA_ACTIVE,
             "": None,
             }
+
+    _fuzzy_key = "GTG:%s:%s"
 
     def __init__(self, parameters):
         """
@@ -153,24 +152,25 @@ class Backend(GenericBackend):
                     # XXX: this will probably create weird things if there are
                     # more than one VTODO per ICS file
                     for todo in cal.walk("VTODO"):
-                        task = self.task_from_vtodo(todo)
+                        tid = todo['uid']
+                        task = self.datastore.task_factory(tid)
+                        task = self._populate_task(todo)
                         self.datastore.push_task(task)
 
-    def task_from_vtodo(self, todo):
+    @classmethod
+    def _populate_task(cls, task, todo):
         """ This function create a new Task in the GTG core based on the
         contents of the Todo
         
         @return: a new Task to push into self.datastore if needed
         """
-        tid = todo['uid']
-        task = self.datastore.task_factory(tid)
-        task.add_remote_id(self._general_description[GenericBackend.BACKEND_NAME], tid)
+        task.add_remote_id(cls._general_description[GenericBackend.BACKEND_NAME], todo['uid'])
         task.set_title(todo['SUMMARY'])
 
         status = task.STA_ACTIVE
         donedate = None
         if todo.has_key('STATUS'):
-            status = self._status_map[todo['STATUS']]
+            status = cls._status_map[todo['STATUS']]
             if status == task.STA_DONE:
                 donedate = Date(todo["COMPLETED"].dt)
         task.set_status(status, donedate=donedate)
@@ -188,11 +188,22 @@ class Backend(GenericBackend):
         #     task.set_start_date(modified)
 
         if todo.has_key("CATEGORIES"):
-            tags = todo.get_inline(["CATEGORIES"])
+            tags = todo.get_inline("CATEGORIES", decode=False)
+            print("all tags: %s" % tags)
             # XXX: actively ignore languageparam after ';', see [0]
             # [0] https://tools.ietf.org/html/rfc2445#page-78
             # tags = (tag for tag in tags.split(',') if tag.strip() != "")
+            for tag in [t for t in tags if t.startswith(cls._fuzzy_key[0:3])]:
+                print("fuzzy_date tag: %s" % tag)
+                stag = tag.split(":")
+                if stag[1] == 'DTSTART':
+                    task.set_start_date(stag[2])
+                    tags.remove(tag)
+                elif stag[1] == 'DUE':
+                    task.set_due_date(stag[2])
+                    tags.remove(tag)
             task.tag_added(tags)
+            # XXX: check for DUE and  DTSTART
 
         if todo.has_key("DESCRIPTION"):
             content = todo["DESCRIPTION"]
@@ -201,7 +212,7 @@ class Backend(GenericBackend):
             task.set_text(content)
 
         if todo.has_key("RELATED-TO"):
-            subtasks = todo.get_inline(["RELATED-TO"])
+            subtasks = todo.get_inline("RELATED-TO")
             # FIXME: default relationship is PARENT, we treat it as a CHILD here
             # It can also be overriden with a reltypeparam [1]
             # [1] https://tools.ietf.org/html/rfc2445#page-110
@@ -212,47 +223,43 @@ class Backend(GenericBackend):
 
         return task
 
-    def task_to_vtodo(self, task, todo=None):
+    @classmethod
+    def _populate_vtodo(cls, todo, task):
         vnow = vDateMaybeTime(datetime.datetime.now())
-        if todo is None:
-            todo = Todo()
-            todo['CREATED'] = vnow
+        todo['CREATED'] = vnow
 
-        todo['UID'] = task.get_remote_ids()[self._general_description[GenericBackend.BACKEND_NAME]]
+        # XXX: move to state-related method
+        #todo['UID'] = task.get_remote_ids()[self._general_description[GenericBackend.BACKEND_NAME]]
+        todo['UID'] = None
         todo['SUMMARY'] = vText(task.get_title())
 
         status = task.get_status()
-        if not todo.has_key('STATUS') or status != self._status_map[todo['STATUS']]:
-            # Only update the VTODO if the mapped status is different
-            if status == task.STA_DONE:
-            	todo['STATUS'] = 'COMPLETED'
-            elif status == task.STA_DISMISSED:
-            	todo['STATUS'] = 'CANCELLED'
-            else:
-            	# GTG can't distinguish 'NEEDS-ACTION' from 'IN-PROGRESS'
-            	todo['STATUS'] = 'NEEDS-ACTION'
-		# Update the completion date separately in case it has changed
-        if status == task.STA_DONE and \
-                (not todo.has_key('COMPLETED')): # or
-                        #Date(todo['COMPLETED']).days_left(task.get_closed_date().isoformat()) != 0 ):
+        if status == task.STA_DONE:
+            todo['STATUS'] = 'COMPLETED'
+        elif status == task.STA_DISMISSED:
+            todo['STATUS'] = 'CANCELLED'
+        else:
+            # XXX: GTG can't distinguish 'NEEDS-ACTION' from 'IN-PROGRESS'
+            todo['STATUS'] = 'NEEDS-ACTION'
+
+        # Update timestamps; fuzzy dates go in CATEGORIES
+        tags = task.get_tags()
+        if status == task.STA_DONE or status == task.STA_DISMISSED:
             todo['COMPLETED'] = vDateMaybeTime(task.get_closed_date())
+            tags.extend(cls._make_fuzzy_date_category('COMPLETED', task.get_closed_date()))
 
         todo['DUE'] = vDateMaybeTime(task.get_due_date())
-        # Remove empty dates; this allows updating tasks when the date has been removed
-        if todo['DUE'] is None:
-            del todo['DUE']
+        tags.extend(cls._make_fuzzy_date_category('DUE', task.get_due_date()))
 
         todo['DTSTART'] = vDateMaybeTime(task.get_start_date())
-        if todo['DTSTART'] is None:
-            del todo['DTSTART']
+        tags.extend(cls._make_fuzzy_date_category('DTSTART', task.get_start_date()))
 
         todo['LAST-MODIFIED'] = vnow
-        if todo['LAST-MODIFIED'] is None:
-            del todo['LAST-MODIFIED']
 
-        tags = task.get_tags()
         if len(tags) > 0:
-            todo.set_inline('CATEGORIES', [tag.get_name().strip('@') for tag in tags])
+            todo.set_inline('CATEGORIES', [
+                tag.get_name().strip('@') if hasattr(tag, "get_name") else tag for tag in tags
+                ])
 
         # XXX: remove <content>
         todo['DESCRIPTION'] = vText(task.get_text())
@@ -262,6 +269,14 @@ class Backend(GenericBackend):
             todo.set_inline('RELATED-TO', subtasks)
 
         return todo
+
+    @classmethod
+    def _make_fuzzy_date_category(cls, attribute, date):
+        if date == Date.soon():
+            return [cls._fuzzy_key % (attribute, "soon")]
+        elif date == Date.someday():
+            return [cls._fuzzy_key % (attribute, "someday")]
+        return []
 
     def set_task(self, task):
         """
@@ -302,7 +317,9 @@ class Backend(GenericBackend):
                 cal.add('version', '2.0')
                 todo = None
 
-        todo = self.task_to_vtodo(task, todo)
+        todo = Todo()
+        self._populate_vtodo(todo, task)
+        # XXX: use syncengine
         cal.add_component(todo)
 
         f = open(ics_file, 'wb')
