@@ -18,35 +18,43 @@
 #] this program.  If not, see <http://www.gnu.org/licenses/>.
 # -----------------------------------------------------------------------------
 
-from unittest import TestCase
+import unittest
 from unittest.mock import patch, mock_open, Mock
 
+import logging
 from icalendar import Calendar, Todo, vDate, vDatetime, vText
-from GTG.core.task import Task
+
 from GTG.core.tag import Tag
+from GTG.core.task import Task
 from GTG.tools.dates import Date
+from GTG.tools.logger import Log
 
 from GTG.backends.backend_vdir_ics import Backend, vDateMaybeTime
 
-class TestConversion(TestCase):
+class TestConversion(unittest.TestCase):
     def setUp(self):
+        # Log.setLevel(logging.INFO)
         self.mock_requester = patch('GTG.core.requester.Requester').start()
-        self.mock_requester.get_tag= lambda x: Tag(x, self.mock_requester)
+        self.mock_requester.get_tag = lambda x: Tag(x, self.mock_requester)
+        self.mock_requester.get_task = lambda x: [t for t in self.task_list if x == t.get_id()].pop()
 
         self.task = Task("test_conversion_task", self.mock_requester)
         self.task.set_complex_title("Test vDir ICS backend @coding @testing defer:soon due:someday")
         self.task.set_text("testing")
 
+        self.task_list = [self.task]
+
     def tearDown(self):
         patch.stopall()
 
-    def test_populate_functions(self):
+
+    def test_1_populate_vtodo(self):
         # Task -> VTODO
         todo = Todo()
         Backend._populate_vtodo(todo, self.task)
         self.assertEqual(todo['UID'], Backend._make_uid(self.task.get_id()))
         self.assertEqual(todo['SUMMARY'], self.task.get_title())
-        self.assertEqual(todo['DESCRIPTION'], self.task.get_text())
+        self.assertEqual("<content>%s</content>" % (todo['DESCRIPTION']), self.task.get_text())
         self.assertEqual(Backend._status_map[todo['STATUS']], self.task.get_status())
         self._test_vtodo_date(todo, 'DTSTART', self.task.get_start_date())
         self.assertTrue(Backend._fuzzy_key % ("DTSTART", "soon") in todo["CATEGORIES"])
@@ -58,10 +66,26 @@ class TestConversion(TestCase):
                 [t for t in todo.get_inline('CATEGORIES', decode=False)  # todo tags without GTG:*
                     if not t.startswith(Backend._fuzzy_key[0:3])])
 
-        # XXX: test relationships
+        print(todo.to_ical().decode())
 
+    def _test_vtodo_date(self, todo, attribute, taskdate):
+        if taskdate == Date.no_date():
+            self.assertFalse(todo.has_key(attribute))
+        else:
+            self.assertTrue(todo.has_key(attribute))
+            if taskdate == Date.soon():
+                self.assertTrue(Backend._fuzzy_key % (attribute, "soon") in todo["CATEGORIES"])
+            elif taskdate == Date.someday():
+                self.assertTrue(Backend._fuzzy_key % (attribute, "someday") in todo["CATEGORIES"])
+            else:
+                self.assertEqual(todo[attribute].dt, taskdate)
+
+
+    def test_2_populate_task(self):
+        todo = Todo()
+        Backend._populate_vtodo(todo, self.task)
         # VTODO -> Task
-        task2 = Task("", self.mock_requester)
+        task2 = Task("test_2_populate_task", self.mock_requester)
         Backend._populate_task(task2, todo)
         rids = self.task.get_remote_ids()
         self.assertTrue(Backend.get_name() in rids.keys())
@@ -79,20 +103,41 @@ class TestConversion(TestCase):
                 [t.get_name() for t in task2.get_tags()]
                 )
 
+
+    @unittest.skip("issue with the requester not being fully implemented")
+    def test_3_task_relationships(self):
+        todo = Todo()
+        Backend._populate_vtodo(todo, self.task)
+
+        parent = Task("test_conversion_parent", self.mock_requester)
+        parent.set_complex_title("this is a parent")
+
+        self.task_list.append(parent)
+
+        parent.add_child(self.task.get_id())
+        self.task.set_parent(parent.get_id())
+
+        print("subtasks: %s" % parent.get_subtasks())
+
+        ptodo = Todo()
+        Backend._populate_vtodo(ptodo, parent)
+
+        print(todo.to_ical().decode())
+        print(ptodo.to_ical().decode())
+
+        self.assertTrue("RELATED-TO" in todo.keys())
+
         # self.fail() # XXX: useful if we want to see the output
 
 
-    def _test_vtodo_date(self, todo, attribute, taskdate):
-        if taskdate == Date.no_date():
-            self.assertFalse(todo.has_key(attribute))
-        else:
-            self.assertTrue(todo.has_key(attribute))
-            if taskdate == Date.soon():
-                self.assertTrue(Backend._fuzzy_key % (attribute, "soon") in todo["CATEGORIES"])
-            elif taskdate == Date.someday():
-                self.assertTrue(Backend._fuzzy_key % (attribute, "someday") in todo["CATEGORIES"])
-            else:
-                self.assertEqual(todo[attribute].dt, taskdate)
+    @unittest.skip("not implemented")
+    def test_4_statuses(self):
+        self.fail("test close/dismiss")
+
+
+    @unittest.skip("not implemented")
+    def test_5_dates(self):
+        self.fail("test normal date on due date")
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

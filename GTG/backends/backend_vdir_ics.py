@@ -198,7 +198,6 @@ class Backend(GenericBackend):
             # [0] https://tools.ietf.org/html/rfc2445#page-78
             # tags = (tag for tag in tags.split(',') if tag.strip() != "")
             for tag in tags:
-                print(tag)
                 stag = tag.split(":")
                 if len(stag) > 1:
                     if stag[1] == 'DTSTART':
@@ -271,11 +270,18 @@ class Backend(GenericBackend):
                 ])
 
         # XXX: remove <content>
-        todo['DESCRIPTION'] = vText(task.get_text())
+        todo['DESCRIPTION'] = vText(task.get_text().replace("<content>", "").replace("</content>", ""))
 
+        if task.has_parent():
+            todo.set_inline('RELATED-TO',
+                    ["<%s>" % (
+                        self.req.get_task(p_tid).get_remote_ids()[cls.get_name()])
+                    for p_tid in self.get_parents()])
         subtasks = task.get_children()
         if len(subtasks) > 0:
-            todo.set_inline('RELATED-TO', subtasks)
+            todo.set_inline('RELATED-TO;RELTYPE=CHILD',
+                    ["<%s>" % (s.get_remote_ids()[cls.get_name()])
+                        for s in subtasks])
 
         return todo
 
