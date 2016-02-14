@@ -156,7 +156,7 @@ class Backend(GenericBackend):
                     for todo in cal.walk("VTODO"):
                         tid = todo['uid']
                         task = self.datastore.task_factory(tid)
-                        task = self._populate_task(todo)
+                        task = self._populate_task(task, todo)
                         self.datastore.push_task(task)
 
     @classmethod
@@ -272,15 +272,17 @@ class Backend(GenericBackend):
         # XXX: remove <content>
         todo['DESCRIPTION'] = vText(task.get_text().replace("<content>", "").replace("</content>", ""))
 
-        if task.has_parent():
-            todo.set_inline('RELATED-TO',
-                    ["<%s>" % (
-                        self.req.get_task(p_tid).get_remote_ids()[cls.get_name()])
-                    for p_tid in self.get_parents()])
+        # XXX: parents might not have been created in vDir yet
+        # if task.has_parent():
+        #     todo.set_inline('RELATED-TO',
+        #             ["<%s>" % (
+        #                 task.req.get_task(p_tid).get_remote_ids()[cls.get_name()])
+        #             for p_tid in task.get_parents()])
         subtasks = task.get_children()
         if len(subtasks) > 0:
             todo.set_inline('RELATED-TO;RELTYPE=CHILD',
-                    ["<%s>" % (s.get_remote_ids()[cls.get_name()])
+                    # ["<%s>" % (s.get_remote_ids()[cls.get_name()])
+                    ["<%s>" % s
                         for s in subtasks])
 
         return todo
@@ -306,6 +308,9 @@ class Backend(GenericBackend):
         It will create one file per task, even if it already exists in anothe one.
         """
         rids = task.get_remote_ids()
+        todo = Todo()
+        self._populate_vtodo(todo, task)
+
         rid = rids[self.get_name()]
         ics_file = self.ics_file(rid)
 
@@ -318,17 +323,14 @@ class Backend(GenericBackend):
                 cal = Calendar.from_ical(data)
                 # todo = [t in cal.walk('VTODO') where t['UID'] == tid]
                 # todo = todo.pop()
-                todo = cal.walk('VTODO')[0]
+                #todo = cal.walk('VTODO')[0]
                 # XXX: Assume there is only one VTODO, clear the rest
                 cal.subcomponents.clear()
         else:
                 cal = Calendar()
                 cal.add("prodid", "//GTG//vdir ICS//EN")
                 cal.add('version', '2.0')
-                todo = None
 
-        todo = Todo()
-        self._populate_vtodo(todo, task)
         # XXX: use syncengine
         cal.add_component(todo)
 
