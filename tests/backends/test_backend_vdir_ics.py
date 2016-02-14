@@ -68,6 +68,11 @@ class TestConversion(TestCase):
         self.assertEqual(task2.get_due_date(), self.task.get_due_date())
         self.assertEqual(task2.get_closed_date(), self.task.get_closed_date())
 
+        self.assertListEqual(
+                [t.get_name() for t in self.task.get_tags()],
+                [t.get_name() for t in task2.get_tags()]
+                )
+
         # self.fail()
 
 

@@ -189,21 +189,19 @@ class Backend(GenericBackend):
 
         if todo.has_key("CATEGORIES"):
             tags = todo.get_inline("CATEGORIES", decode=False)
-            print("all tags: %s" % tags)
             # XXX: actively ignore languageparam after ';', see [0]
             # [0] https://tools.ietf.org/html/rfc2445#page-78
             # tags = (tag for tag in tags.split(',') if tag.strip() != "")
-            for tag in [t for t in tags if t.startswith(cls._fuzzy_key[0:3])]:
-                print("fuzzy_date tag: %s" % tag)
+            for tag in tags:
+                print(tag)
                 stag = tag.split(":")
-                if stag[1] == 'DTSTART':
-                    task.set_start_date(stag[2])
-                    tags.remove(tag)
-                elif stag[1] == 'DUE':
-                    task.set_due_date(stag[2])
-                    tags.remove(tag)
-            task.tag_added(tags)
-            # XXX: check for DUE and  DTSTART
+                if len(stag) > 1:
+                    if stag[1] == 'DTSTART':
+                        task.set_start_date(stag[2])
+                    elif stag[1] == 'DUE':
+                        task.set_due_date(stag[2])
+                else:
+                    task.tag_added("@%s" % tag)
 
         if todo.has_key("DESCRIPTION"):
             content = todo["DESCRIPTION"]
