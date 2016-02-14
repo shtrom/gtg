@@ -96,6 +96,7 @@ class Backend(GenericBackend):
             }
 
     _fuzzy_key = "GTG:%s:%s"
+    _uid_template = "%s-%s-%s@gtg"
 
     def __init__(self, parameters):
         """
@@ -124,8 +125,9 @@ class Backend(GenericBackend):
         """ This is called when a backend is enabled """
         super(Backend, self).initialize()
 
-    def make_uid(self, tid):
-        return "%s-%s-%s@gtg" % (datetime.datetime.now().strftime("%Y%m%dT%H%M%S%z"),
+    @classmethod
+    def _make_uid(cls, tid):
+        return cls._uid_template % (datetime.datetime.now().strftime("%Y%m%dT%H%M%S%z"),
                 tid, os.uname().nodename)
 
     def ics_file(self, rid):
@@ -146,7 +148,7 @@ class Backend(GenericBackend):
                 data = file.read()
                 file.close()
                 if data.find("\nBEGIN:VTODO\n"):
-                    Log.debug("GTG <- %s: %s %s" %(self._general_description[self.BACKEND_HUMAN_NAME],
+                    Log.debug("GTG <- %s: %s %s" %(self.get_human_name(),
                         path, child))
                     cal = Calendar.from_ical(data)
                     # XXX: this will probably create weird things if there are
@@ -161,10 +163,13 @@ class Backend(GenericBackend):
     def _populate_task(cls, task, todo):
         """ This function create a new Task in the GTG core based on the
         contents of the Todo
-        
+
         @return: a new Task to push into self.datastore if needed
         """
-        task.add_remote_id(cls._general_description[GenericBackend.BACKEND_NAME], todo['uid'])
+        rids = task.get_remote_ids()
+        if cls.get_name() not in rids.keys():
+                task.add_remote_id(cls.get_name(), todo["UID"])
+
         task.set_title(todo['SUMMARY'])
 
         status = task.STA_ACTIVE
@@ -226,9 +231,15 @@ class Backend(GenericBackend):
         vnow = vDateMaybeTime(datetime.datetime.now())
         todo['CREATED'] = vnow
 
-        # XXX: move to state-related method
-        #todo['UID'] = task.get_remote_ids()[self._general_description[GenericBackend.BACKEND_NAME]]
-        todo['UID'] = None
+        tid = task.get_id()
+        rids = task.get_remote_ids()
+        if cls.get_name() in rids.keys():
+                rid = rids[cls.get_name()]
+        else:
+                rid = cls._make_uid(tid)
+                task.add_remote_id(cls.get_name(), rid)
+
+        todo['UID'] = rid
         todo['SUMMARY'] = vText(task.get_title())
 
         status = task.get_status()
@@ -280,7 +291,7 @@ class Backend(GenericBackend):
         """
         This function is called from GTG core whenever a task should be
         saved, either because it's a new one or it has been modified.
-        This function will look into the load or create an ICS file,
+        This function will look into the vDir and load or create an ICS file,
         and convert the task data.
 
         @param task: the task object to save
@@ -288,16 +299,11 @@ class Backend(GenericBackend):
         XXX: This doesn't support multiple VTODOs in a single ICS file.
         It will create one file per task, even if it already exists in anothe one.
         """
-        tid = task.get_id()
         rids = task.get_remote_ids()
-        if self._general_description[GenericBackend.BACKEND_NAME] in rids.keys():
-                rid = rids[self._general_description[GenericBackend.BACKEND_NAME]]
-        else:
-                rid = self.make_uid(tid)
-                task.add_remote_id(self._general_description[GenericBackend.BACKEND_NAME], rid)
+        rid = rids[self.get_name()]
         ics_file = self.ics_file(rid)
 
-        Log.debug("GTG -> %s: %s" % (self._general_description[self.BACKEND_HUMAN_NAME], ics_file))
+        Log.debug("GTG -> %s: %s" % (self.get_human_name(), ics_file))
 
         if os.path.exists(ics_file):
                 file = open(ics_file)

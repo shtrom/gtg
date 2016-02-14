@@ -41,8 +41,10 @@ class TestConversion(TestCase):
         patch.stopall()
 
     def test_populate_functions(self):
+        # Task -> VTODO
         todo = Todo()
         Backend._populate_vtodo(todo, self.task)
+        self.assertEqual(todo['UID'], Backend._make_uid(self.task.get_id()))
         self.assertEqual(todo['SUMMARY'], self.task.get_title())
         self.assertEqual(todo['DESCRIPTION'], self.task.get_text())
         self.assertEqual(Backend._status_map[todo['STATUS']], self.task.get_status())
@@ -57,10 +59,14 @@ class TestConversion(TestCase):
                     if not t.startswith(Backend._fuzzy_key[0:3])])
 
         # XXX: test relationships
-        # XXX: test ids
 
+        # VTODO -> Task
         task2 = Task("", self.mock_requester)
         Backend._populate_task(task2, todo)
+        rids = self.task.get_remote_ids()
+        self.assertTrue(Backend.get_name() in rids.keys())
+        rid = rids[Backend.get_name()]
+        self.assertEqual(rid, todo['UID'])
         self.assertEqual(task2.get_title(), self.task.get_title())
         self.assertEqual(task2.get_text(), self.task.get_text())
         self.assertEqual(task2.get_status(), self.task.get_status())
@@ -73,7 +79,7 @@ class TestConversion(TestCase):
                 [t.get_name() for t in task2.get_tags()]
                 )
 
-        # self.fail()
+        # self.fail() # XXX: useful if we want to see the output
 
 
     def _test_vtodo_date(self, todo, attribute, taskdate):
