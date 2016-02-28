@@ -276,18 +276,24 @@ class Backend(GenericBackend):
         # XXX: do proper cleanup of the text, and  re-add tags on import
         todo['DESCRIPTION'] = vText(task.get_text().replace("<content>", "").replace("</content>", ""))
 
-        # XXX: parents might not have been created in vDir yet
-        # if task.has_parent():
-        #     todo.set_inline('RELATED-TO',
-        #             ["<%s>" % (
-        #                 task.req.get_task(p_tid).get_remote_ids()[cls.get_name()])
-        #             for p_tid in task.get_parents()])
+        if task.has_parent():
+            parents = task.get_parents()
+            for p_tid in parents: # XXX: There really is ever only one parent, but it's a list
+                p = task.req.get_task(p_tid)
+                if cls.get_name() not in p.get_remote_ids().keys():
+                    p.add_remote_id(cls.get_name(), cls._make_uid(tid))
+            todo.set_inline('RELATED-TO',
+                    ["<%s>" % (
+                        task.req.get_task(p_tid).get_remote_ids()[cls.get_name()])
+                    for p_tid in parents])
+        # XXX: The following bit is informational: not reused when reimporting data
         subtasks = task.get_children()
         if len(subtasks) > 0:
             todo.set_inline('RELATED-TO;RELTYPE=CHILD',
                     # ["<%s>" % (s.get_remote_ids()[cls.get_name()])
-                    ["<%s>" % s
-                        for s in subtasks])
+                    ["<%s>" % (
+                        task.req.get_task(s_tid).get_remote_ids()[cls.get_name()])
+                        for s_tid in subtasks])
 
         return todo
 

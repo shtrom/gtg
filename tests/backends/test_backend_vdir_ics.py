@@ -107,39 +107,52 @@ class TestConversion(unittest.TestCase):
                 )
 
 
-    # @unittest.skip("issue with the requester not being fully implemented")
-    def test_3_task_relationships(self):
-        todo = Todo()
-        Backend._populate_vtodo(todo, self.task)
-
+    def test_3_task_relationships_to_vtodo(self):
         parent = Task("test_conversion_parent", self.mock_requester)
         parent.set_complex_title("this is a parent")
 
         self.task_tree.add_node(parent)
 
         parent.add_child(self.task.get_id())
+        self.assertTrue(self.task.has_parent())
 
-        print("subtasks: %s" % parent.get_subtasks())
-
+        todo = Todo()
         ptodo = Todo()
+        # In this order, this also tests the ID generation for parents
+        Backend._populate_vtodo(todo, self.task)
         Backend._populate_vtodo(ptodo, parent)
 
         print(todo.to_ical().decode())
         print(ptodo.to_ical().decode())
 
-        self.assertTrue("RELATED-TO;RELTYPE=CHILD" in ptodo.keys())
         self.assertTrue("RELATED-TO" in todo.keys())
+        self.assertTrue(
+                ("<%s>" % (ptodo['UID'])).encode() in
+                    todo.get_inline("RELATED-TO")
+                )
 
-        # self.fail() # XXX: useful if we want to see the output
+        # Informational, but let's test for it anyway
+        self.assertTrue("RELATED-TO;RELTYPE=CHILD" in ptodo.keys())
+        self.assertTrue(
+                ("<%s>" % (todo['UID'])).encode() in
+                    ptodo.get_inline("RELATED-TO;RELTYPE=CHILD")
+                )
+
+
+    @unittest.skip("issue with the requester not being fully implemented")
+    def test_4_task_relationships_to_task(self):
+        self.fail("test conversion from VTODOs with relations to Task")
+
+        self.fail() # XXX: useful if we want to see the output
 
 
     @unittest.skip("not implemented")
-    def test_4_statuses(self):
+    def test_5_statuses(self):
         self.fail("test close/dismiss")
 
 
     @unittest.skip("not implemented")
-    def test_5_dates(self):
+    def test_6_dates(self):
         self.fail("test normal date on due date")
 
 if __name__ == '__main__':
