@@ -218,15 +218,20 @@ class Backend(GenericBackend):
             task.set_text(content)
 
         if todo.has_key("RELATED-TO"):
-            subtasks = todo.get_inline("RELATED-TO")
+            parents = todo.get_inline("RELATED-TO")
             # FIXME: default relationship is PARENT, we treat it as a CHILD here
             # It can also be overriden with a reltypeparam [1]
             # [1] https://tools.ietf.org/html/rfc2445#page-110
-            # subtasks = (subtask for subtask in subtasks.split(',')
-            #		if subtask.strip() != "")
-            for subtask in subtasks:
-                s_rid = subtask.decode().strip("<").strip(">")
-                task.add_child(s_rid)
+            # parents = (parent for parent in parents.split(',')
+            #		if parent.strip() != "")
+            for parent in parents:
+                p_rid = parent.decode().strip("<").strip(">")
+                task.add_parent(p_rid) # XXX: find local ID, not remote
+        # if todo.has_key("RELATED-TO;RELTYPE=CHILD"):
+        #     subtasks = todo.get_inline("RELATED-TO;RELTYPE=CHILD")
+        #     for subtask in subtasks:
+        #         s_rid = subtask.decode().strip("<").strip(">")
+        #         task.add_child(s_rid)
 
         return task
 
