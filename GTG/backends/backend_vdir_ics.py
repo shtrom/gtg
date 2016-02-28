@@ -24,6 +24,9 @@ in a vdir [0]. The idea is to use this backend with a remote CalDAV server
 synced locally with vdirsyncer [1]. This allows to use GTG alongside CLI
 clients such at todoman [2].
 
+To avoid losing fuzzy dates, the information is stored as ICal CATEGORIES in
+the form GTG:(DTSTART|DUE):(soon|someday)
+
 [0] https://vdirsyncer.readthedocs.org/en/stable/vdir.html
 [1] https://vdirsyncer.readthedocs.org/
 [2] https://hugo.barrera.io/journal/2015/03/30/introducing-todoman/
@@ -248,6 +251,7 @@ class Backend(GenericBackend):
             todo['STATUS'] = 'CANCELLED'
         else:
             # XXX: GTG can't distinguish 'NEEDS-ACTION' from 'IN-PROGRESS'
+            # TODO: Store in tags?
             todo['STATUS'] = 'NEEDS-ACTION'
 
         # Update timestamps; fuzzy dates go in CATEGORIES
@@ -269,7 +273,7 @@ class Backend(GenericBackend):
                 tag.get_name().strip('@') if hasattr(tag, "get_name") else tag for tag in tags
                 ])
 
-        # XXX: remove <content>
+        # XXX: do proper cleanup of the text, and  re-add tags on import
         todo['DESCRIPTION'] = vText(task.get_text().replace("<content>", "").replace("</content>", ""))
 
         # XXX: parents might not have been created in vDir yet
