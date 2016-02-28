@@ -24,7 +24,7 @@ in a vdir [0]. The idea is to use this backend with a remote CalDAV server
 synced locally with vdirsyncer [1]. This allows to use GTG alongside CLI
 clients such at todoman [2].
 
-To avoid losing fuzzy dates, the information is stored as ICal CATEGORIES in
+To avoid losing fuzzy dates, the information is stored as iCal CATEGORIES in
 the form GTG:(DTSTART|DUE):(soon|someday)
 
 [0] https://vdirsyncer.readthedocs.org/en/stable/vdir.html

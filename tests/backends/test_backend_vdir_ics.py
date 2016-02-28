@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Getting Things GNOME! - a personal organizer for the GNOME desktop
 # Copyright (c) 2008-2015 - Lionel Dricot & Bertrand Rousseau
-#& Copyright (c) 2016 - Olivier Mehani (this file)
+# Copyright (c) 2016 - Olivier Mehani (this file)
 #
 # This program is free software: you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -15,7 +15,7 @@
 # details.
 #
 # You should have received a copy of the GNU General Public License along with
-#] this program.  If not, see <http://www.gnu.org/licenses/>.
+# this program.  If not, see <http://www.gnu.org/licenses/>.
 # -----------------------------------------------------------------------------
 
 import unittest
