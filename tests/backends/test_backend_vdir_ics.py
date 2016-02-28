@@ -24,6 +24,8 @@ from unittest.mock import patch, mock_open, Mock
 import logging
 from icalendar import Calendar, Todo, vDate, vDatetime, vText
 
+from liblarch import MainTree
+
 from GTG.core.tag import Tag
 from GTG.core.task import Task
 from GTG.tools.dates import Date
@@ -36,13 +38,14 @@ class TestConversion(unittest.TestCase):
         # Log.setLevel(logging.INFO)
         self.mock_requester = patch('GTG.core.requester.Requester').start()
         self.mock_requester.get_tag = lambda x: Tag(x, self.mock_requester)
-        self.mock_requester.get_task = lambda x: [t for t in self.task_list if x == t.get_id()].pop()
+        self.mock_requester.get_task = lambda x: self.task_tree.get_node(x)
 
         self.task = Task("test_conversion_task", self.mock_requester)
         self.task.set_complex_title("Test vDir ICS backend @coding @testing defer:soon due:someday")
         self.task.set_text("testing")
 
-        self.task_list = [self.task]
+        self.task_tree = MainTree()
+        self.task_tree.add_node(self.task)
 
     def tearDown(self):
         patch.stopall()
@@ -104,7 +107,7 @@ class TestConversion(unittest.TestCase):
                 )
 
 
-    @unittest.skip("issue with the requester not being fully implemented")
+    # @unittest.skip("issue with the requester not being fully implemented")
     def test_3_task_relationships(self):
         todo = Todo()
         Backend._populate_vtodo(todo, self.task)
@@ -112,10 +115,9 @@ class TestConversion(unittest.TestCase):
         parent = Task("test_conversion_parent", self.mock_requester)
         parent.set_complex_title("this is a parent")
 
-        self.task_list.append(parent)
+        self.task_tree.add_node(parent)
 
         parent.add_child(self.task.get_id())
-        self.task.set_parent(parent.get_id())
 
         print("subtasks: %s" % parent.get_subtasks())
 
@@ -125,6 +127,7 @@ class TestConversion(unittest.TestCase):
         print(todo.to_ical().decode())
         print(ptodo.to_ical().decode())
 
+        self.assertTrue("RELATED-TO;RELTYPE=CHILD" in ptodo.keys())
         self.assertTrue("RELATED-TO" in todo.keys())
 
         # self.fail() # XXX: useful if we want to see the output
