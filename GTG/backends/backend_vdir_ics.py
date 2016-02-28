@@ -173,7 +173,8 @@ class Backend(GenericBackend):
         if cls.get_name() not in rids.keys():
                 task.add_remote_id(cls.get_name(), todo["UID"])
 
-        task.set_title(todo['SUMMARY'])
+        if todo.has_key('STATUS'):
+            task.set_title(todo['SUMMARY'])
 
         status = task.STA_ACTIVE
         donedate = None
@@ -222,9 +223,10 @@ class Backend(GenericBackend):
             # It can also be overriden with a reltypeparam [1]
             # [1] https://tools.ietf.org/html/rfc2445#page-110
             # subtasks = (subtask for subtask in subtasks.split(',')
-            # 		if subtask.strip() != "")
+            #		if subtask.strip() != "")
             for subtask in subtasks:
-                task.add_child(subtask)
+                s_rid = subtask.decode().strip("<").strip(">")
+                task.add_child(s_rid)
 
         return task
 

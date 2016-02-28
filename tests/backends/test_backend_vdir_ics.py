@@ -139,11 +139,33 @@ class TestConversion(unittest.TestCase):
                 )
 
 
-    @unittest.skip("issue with the requester not being fully implemented")
+    # @unittest.skip("issue with the requester not being fully implemented")
     def test_4_task_relationships_to_task(self):
-        self.fail("test conversion from VTODOs with relations to Task")
+        ptodo = Todo()
+        ptodo['UID'] = "parent_uid"
 
-        self.fail() # XXX: useful if we want to see the output
+        todo = Todo()
+        todo['UID'] = "subtask_uid"
+        todo.set_inline('RELATED-TO', [("<%s>" % (ptodo['UID']))])
+
+        print(todo.to_ical().decode())
+        print(ptodo.to_ical().decode())
+
+        ptask = Task("ptask", self.mock_requester)
+        self.task_tree.add_node(ptask)
+        Backend._populate_task(ptask, ptodo)
+        task = Task("task", self.mock_requester)
+        self.task_tree.add_node(task)
+        Backend._populate_task(task, todo)
+
+        subtasks = ptask.get_children()
+        self.assertTrue(len(subtasks) == 1)
+        self.assertTrue(task.get_id() in subtasks)
+
+        self.assertTrue(task.has_parent())
+        self.assertTrue(task.get_parents()[0] == ptask.get_id())
+
+        # self.fail() # XXX: useful if we want to see the output
 
 
     @unittest.skip("not implemented")
